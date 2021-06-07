@@ -1,6 +1,6 @@
-[submodule "LIB/wabbit-src"]
-	path = LIB/WABBIT
-	url = https://github.com/adaptive-cfd/WABBIT-opt.git
 [submodule "LIB/sPOD"]
 	path = LIB/sPOD
 	url = https://github.com/Philipp137/sPOD.git
+[submodule "LIB/WABBIT"]
+	path = LIB/WABBIT
+	url = https://github.com/adaptive-cfd/WABBIT.git
