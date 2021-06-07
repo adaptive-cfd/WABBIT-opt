@@ -1,3 +1,0 @@
-[submodule "wabbit-src"]
-	path = LIB/wabbit-src
-	url = https://github.com/adaptive-cfd/WABBIT-opt.git
