@@ -4,3 +4,6 @@
 [submodule "LIB/WABBIT"]
 	path = LIB/WABBIT
 	url = https://github.com/adaptive-cfd/WABBIT.git
+[submodule "LIB/from_fourier_to_koopman"]
+	path = LIB/from_fourier_to_koopman
+	url = git@github.com:helange23/from_fourier_to_koopman.git
