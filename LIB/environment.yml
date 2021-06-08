@@ -1,0 +1,12 @@
+name: wabbit-opt
+channels:
+  - conda-forge
+  - defaults
+  - pytorch
+  - anaconda
+dependencies:
+  - matplotlib
+  - scipy
+  - notebook
+  - scikit-learn
+  - pytorch
