@@ -3,19 +3,21 @@
 """
 Created on Fri Nov 30 09:11:12 2018
 
-@author: philipp krah, jiahan wang
+@author: philipp krah
 """
 
 ###############################################################################
 # IMPORTED MODULES
 ###############################################################################
 import sys
-sys.path.append('./../lib')
+sys.path.append('./../LIB/sPOD/lib/')
 import numpy as np
 from numpy import exp, mod,meshgrid
+from numpy.linalg import norm
 import matplotlib.pyplot as plt
-from sPOD_tools import shifted_rPCA
+from sPOD_tools import shifted_rPCA, sPOD_distribute_residual
 from transforms import transforms
+from scipy.optimize import basinhopping
 ###############################################################################
 
 ##########################################
@@ -37,7 +39,7 @@ c = 1
 [X, T] = meshgrid(x, t)
 X = X.T
 T = T.T
-fun = lambda x, t:  exp(-(mod((x-c*t), L)-0.1)**2/sigma**2) + \
+fun = lambda x, t:  -exp(-(mod((x-c*t), L)-0.1)**2/sigma**2) + \
                     exp(-(mod((x+c*t), L)-0.9)**2/sigma**2)
 
 # Define your field as a list of fields:
@@ -57,20 +59,21 @@ trafos = [transforms(data_shape ,[L], shifts = shifts1, dx = [dx] , use_scipy_tr
             transforms(data_shape ,[L], shifts = shifts2, dx = [dx] , use_scipy_transform=True)]
 
 qmat = np.reshape(fields,[Nx,Nt])
-mu = Nx * Nt / (4 * np.sum(np.abs(qmat)))*0.01
-sPOD_frames, qtilde, rel_err = shifted_rPCA(qmat, trafos, nmodes_max = np.max(nmodes)+10, eps=1e-16, Niter=500, use_rSVD=True, mu = mu)
-
+mu = Nx * Nt / (4 * np.sum(np.abs(qmat)))
+sPOD_frames, qtilde, rel_err = shifted_rPCA(qmat, trafos, nmodes_max = np.max(nmodes)+10, eps=1e-16, Niter=500, use_rSVD=True, mu = mu, lambd = 1e14)
+#sPOD_frames, qtilde  = sPOD_distribute_residual(qmat, trafos, nmodes, eps=1e-16, Niter=400, use_rSVD = False)
 ###########################################
-# %% 1. visualize your results: sPOD frames
+# %% results sPOD frames
 ##########################################
 # the result is a list of the decomposed field.
 # each element of the list contains a frame of the decomposition.<
 # If you want to plot the k-th frame use:
 # 1. frame
+# 1. frame
 k_frame = 0
 plt.figure(num=10)
 plt.subplot(121)
-plt.pcolormesh(sPOD_frames[k_frame].build_field())
+plt.pcolormesh(X,T,sPOD_frames[k_frame].build_field())
 plt.suptitle("sPOD Frames")
 plt.xlabel(r'$N_x$')
 plt.ylabel(r'$N_t$')
@@ -78,7 +81,7 @@ plt.title(r"$q^"+str(k_frame)+"(x,t)$")
 # 2. frame
 k_frame = 1
 plt.subplot(122)
-plt.pcolormesh(sPOD_frames[k_frame].build_field())
+plt.pcolormesh(X,T,sPOD_frames[k_frame].build_field())
 plt.xlabel(r'$N_x$')
 plt.ylabel(r'$N_t$')
 plt.title(r"$q^"+str(k_frame)+"(x,t)$")
@@ -86,7 +89,7 @@ plt.title(r"$q^"+str(k_frame)+"(x,t)$")
 # of your field list (here: density)
 
 ###########################################
-# 2. visualize your results: relative error
+# relative error
 ##########################################
 
 plt.figure(5)
@@ -94,3 +97,56 @@ plt.semilogy(rel_err)
 plt.title("relative error")
 plt.ylabel(r"$\frac{||X - \tilde{X}_i||_2}{||X||_2}$")
 plt.xlabel(r"$i$")
+
+###########################################
+# %% define optimization goal
+##########################################
+Wt = np.zeros([Nt,1])
+Wt[Nt//2] = 1
+
+opt_goal = lambda Qmat: norm(Qmat @ Wt,ord='fro')**2*dx*dt
+
+def my_interpolated_state(sPOD_frames, time, mu):
+
+    shiftsnew = [np.asarray([mu*time]), np.asarray([-mu*time])]
+    qtilde = 0
+    for shift,frame in zip(shiftsnew,sPOD_frames):
+        trafo = transforms(frame.data_shape ,frame.trafo.domain_size, shifts = shift, dx = frame.trafo.dx , use_scipy_transform=True)
+        qtilde += trafo.apply(frame.build_field())
+
+    return qtilde
+
+opt_fun = lambda mu: opt_goal(np.reshape(my_interpolated_state(sPOD_frames,t,mu),[Nx,Nt]))
+
+###########################################
+# %% optimize with global optimizer
+##########################################
+
+bounds = lambda **kwargs: kwargs["x_new"]<1.8*c and kwargs["x_new"]>0*c
+ret = basinhopping(opt_fun,1*c, accept_test=bounds, seed=1)
+mu_star = ret.x
+print("global minimum: mu_* = %.4f, J(mu_*) = %.4e" % (ret.x, ret.fun))
+
+
+###########################################
+# %% plot results of optimization
+##########################################
+fig,ax = plt.subplots(num=100)
+parameter_list = np.linspace(1.4*c,1.8*c,50)
+J_list = [opt_fun(mu) for mu in parameter_list]
+
+plt.plot(parameter_list, J_list)
+plt.vlines(mu_star, *ax.get_ylim(),color= 'r', linestyles='dashed' )
+plt.text(mu_star,ax.get_ylim()[0], r'$\mu^*$', color="r")
+plt.xlabel(r"parameter $\mu$")
+plt.ylabel(r"functional $J(\mu)$")
+
+fig,ax = plt.subplots(1,2, sharey=True)
+ax[0].pcolormesh(X,T,qmat, shading='nearest')
+ax[0].set_title("data")
+plt.xlabel(r" $x$")
+plt.ylabel(r"time $t$")
+ax[1].pcolormesh(X,T,my_interpolated_state(sPOD_frames,t,mu_star),  shading='nearest')
+ax[1].set_title(r"optimal $\mu=\mu_*$")
+plt.xlabel(r" $x$")
+plt.ylabel(r"time $t$")
