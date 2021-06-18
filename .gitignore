@@ -36,3 +36,7 @@
 
 # Backup files
 *.un~
+
+# Folders
+EXAMPLE/images/
+

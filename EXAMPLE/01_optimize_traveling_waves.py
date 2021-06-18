@@ -15,13 +15,14 @@ import numpy as np
 from numpy import exp, mod,meshgrid
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
-from sPOD_tools import shifted_rPCA, sPOD_distribute_residual
+from sPOD_tools import shifted_rPCA, shifted_POD
 from transforms import transforms
 from scipy.optimize import basinhopping
+from scipy.fft import fft
 ###############################################################################
 
 ##########################################
-#%% Define your DATA:
+# %% Define your DATA:
 ##########################################
 #plt.close("all")
 Nx = 400  # number of grid points in x
@@ -29,7 +30,7 @@ Nt = 200  # numer of time intervalls
 
 T = 0.5  # total time
 L = 1  # total domain size
-sigma = 0.015  # standard diviation of the puls
+sigma = 0.015*L  # standard diviation of the puls
 nmodes = 1  # reduction of singular values
 x = np.arange(0,Nx)/Nx*L
 t =np.arange(0,Nt)/Nt*T
@@ -39,28 +40,37 @@ c = 1
 [X, T] = meshgrid(x, t)
 X = X.T
 T = T.T
-fun = lambda x, t:  -exp(-(mod((x-c*t), L)-0.1)**2/sigma**2) + \
-                    exp(-(mod((x+c*t), L)-0.9)**2/sigma**2)
+fun = lambda x,shifts, t:  -exp(-(mod((x+shifts[0]), L)-0.1)**2/sigma**2) + \
+                    exp(-(mod((x+shifts[1]), L)-0.9)**2/sigma**2)
 
 # Define your field as a list of fields:
 # For example the first element in the list can be the density of
 # a flow quantity and the second element could be the velocity in 1D
-density = fun(X, T)
-velocity = fun(X, T)
-shifts1 = np.asarray([c*t])
-shifts2 = np.asarray([-c*t])
+shifts = [np.asarray([-c*t]),np.asarray([c*t])]
+# e = np.zeros_like(t)
+# e[1]=0.2*L
+# e[2]=0.1*L
+# e[0]=-np.sum(e[1:])
+# s = np.asarray([fft(e).real])
+# s[0,0]=0
+# shifts = [s,-s]
+
+density = fun(X,shifts, T)
+velocity = fun(X,shifts, T)
 fields = [density]  #, velocity]
 
 #######################################
 # %% CALL THE SPOD algorithm
 ######################################
-data_shape = [Nx,1,1,Nt]
-trafos = [transforms(data_shape ,[L], shifts = shifts1, dx = [dx] , use_scipy_transform=True),
-            transforms(data_shape ,[L], shifts = shifts2, dx = [dx] , use_scipy_transform=True)]
-
 qmat = np.reshape(fields,[Nx,Nt])
-mu = Nx * Nt / (4 * np.sum(np.abs(qmat)))
-sPOD_frames, qtilde, rel_err = shifted_rPCA(qmat, trafos, nmodes_max = np.max(nmodes)+10, eps=1e-16, Niter=500, use_rSVD=True, mu = mu, lambd = 1e14)
+data_shape = [Nx,1,1,Nt]
+trafos = [transforms(data_shape ,[L], shifts = shifts[0], dx = [dx] , use_scipy_transform=True),
+            transforms(data_shape ,[L], shifts = shifts[1], dx = [dx] , use_scipy_transform=True)]
+
+
+mu = Nx * Nt / (4 * np.sum(np.abs(qmat)))*0.1
+ret = shifted_rPCA(qmat, trafos, nmodes_max = np.max(nmodes)+10, eps=1e-16, Niter=500, use_rSVD=True, mu = mu, lambd = 1e14)
+sPOD_frames, qtilde, rel_err = ret.frames, ret.data_approx, ret.rel_err_hist
 #sPOD_frames, qtilde  = sPOD_distribute_residual(qmat, trafos, nmodes, eps=1e-16, Niter=400, use_rSVD = False)
 ###########################################
 # %% results sPOD frames
@@ -68,7 +78,6 @@ sPOD_frames, qtilde, rel_err = shifted_rPCA(qmat, trafos, nmodes_max = np.max(nm
 # the result is a list of the decomposed field.
 # each element of the list contains a frame of the decomposition.<
 # If you want to plot the k-th frame use:
-# 1. frame
 # 1. frame
 k_frame = 0
 plt.figure(num=10)
@@ -108,7 +117,7 @@ opt_goal = lambda Qmat: norm(Qmat @ Wt,ord='fro')**2*dx*dt
 
 def my_interpolated_state(sPOD_frames, time, mu):
 
-    shiftsnew = [np.asarray([mu*time]), np.asarray([-mu*time])]
+    shiftsnew = [np.asarray([-mu*time]), np.asarray([mu*time])]
     qtilde = 0
     for shift,frame in zip(shiftsnew,sPOD_frames):
         trafo = transforms(frame.data_shape ,frame.trafo.domain_size, shifts = shift, dx = frame.trafo.dx , use_scipy_transform=True)
