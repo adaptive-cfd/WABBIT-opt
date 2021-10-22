@@ -1,9 +1,9 @@
 [submodule "LIB/sPOD"]
 	path = LIB/sPOD
-	url = https://github.com/Philipp137/sPOD.git
+	url = git@github.com:Philipp137/sPOD.git
 [submodule "LIB/WABBIT"]
 	path = LIB/WABBIT
-	url = https://github.com/adaptive-cfd/WABBIT.git
+	url = git@github.com:adaptive-cfd/WABBIT.git
 [submodule "LIB/from_fourier_to_koopman"]
 	path = LIB/from_fourier_to_koopman
 	url = git@github.com:helange23/from_fourier_to_koopman.git
