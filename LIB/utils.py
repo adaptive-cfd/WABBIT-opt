@@ -74,4 +74,7 @@ def calculate_forces(uxs, uys, chi, dx, dy):
     return forcex, frocey
 
 
+def bin_array(num, m):
+    """Convert a positive integer num into an m-bit bit vector"""
+    return np.flip(np.array(list(np.binary_repr(num).zfill(m))).astype(np.int8))
 

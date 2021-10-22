@@ -1,8 +1,8 @@
 name: wabbit-opt
 channels:
-  - conda-forge
   - defaults
   - pytorch
+  - conda-forge
   - anaconda
 dependencies:
   - matplotlib
@@ -10,3 +10,4 @@ dependencies:
   - notebook
   - scikit-learn
   - pytorch
+  - configparser
