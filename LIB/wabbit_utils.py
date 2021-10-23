@@ -42,9 +42,9 @@ def run_wabbit(params_dict, params_inifile, mpicommand, memory, save_log=True, d
         c += " > "+ dirname+".log"
 
     # execute FOM
+    success = 1
     print(c)
     success = os.system(c)
-
     os.chdir("../")
 
     return success

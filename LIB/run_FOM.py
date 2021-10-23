@@ -5,6 +5,8 @@ from numpy import exp, mod,meshgrid
 from numpy.linalg import norm
 from utils import bin_array
 from wabbit_utils import run_wabbit
+import time
+
 
 
 
@@ -18,7 +20,19 @@ mu_vecs = np.asarray([(bin_array(i, D) * 2 - np.ones(D)) * mu_max for i in range
 mpicommand = "mpirun -np 216 --hostfile=hosts"
 memory = "--memory=2GB"
 
-for mu in mu_vecs.T:
+for i,mu in enumerate(mu_vecs.T):
     value_str = ' '.join(map(str,mu))+';'
     params_dict = {"inifiles":["kin1.ini","kin2.ini"],"section": "Wingsection", "key": "ai_y0", "value": value_str}
-    run_wabbit(params_dict,params_inifile="two_moving_cylinders.ini",mpicommand= mpicommand, memory=memory)
+
+    ## run FOM
+    print("\n(%d) Running FOM at mu = "%i + value_str)
+    t_cpu = time.time()
+    success = run_wabbit(params_dict,params_inifile="two_moving_cylinders.ini",mpicommand= mpicommand, memory=memory)
+    t_cpu = time.time() - t_cpu
+
+    if success:
+        print("FOM-simulation successfull tcpu = %2.2f!" % t_cpu )
+    else:
+        print("FOM-simulation broke tcpu = %2.2f!" % t_cpu)
+        print("I am stopping here!")
+        break
