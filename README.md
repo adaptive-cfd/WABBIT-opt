@@ -28,3 +28,6 @@ Open terminal and go to the root directory of wabbit-opt and run:
     make
     make conda-env
     conda activate wabbit-opt
+
+If you want to install wabbit-opt on a cluster without direct internet access
+use the [conda-pack](https://conda.github.io/conda-pack/) package.
