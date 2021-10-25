@@ -16,22 +16,25 @@ def run_wabbit(params_dict, params_inifile, mpicommand, memory, save_log=True, d
     blueprint = ROOT_DIR+"/LIB/WABBIT"
     dirname = params_key.replace(" ", "") + "_" + params_value.replace(" ", '_').replace(";",'')
     if not os.path.exists(dat_dir+dirname):
-        destination = shutil.copytree(blueprint, dat_dir+dirname, dirs_exist_ok=True)
+        destination = shutil.copytree(blueprint, dat_dir+dirname)
+
+        # change parameter in inifile
+        parser = ConfigParser()
+        for inifile in inifiles:
+            copy = shutil.copyfile(ROOT_DIR+"/inifiles/"+inifile, destination+"/"+inifile)
+            parser.read(copy)
+            parser.set(params_section, params_key, params_value)
+            cfgfile = open(copy, 'w')
+            parser.write(cfgfile, space_around_delimiters=False)  # use flag in case case you need to avoid white space.
+            cfgfile.close()
+
+        # copy main inifile
+        shutil.copyfile(ROOT_DIR+"/inifiles/"+params_inifile, destination+"/"+params_inifile)
+    
     else:
+	# this is a continue run
         destination = dat_dir+dirname
 
-    # change parameter in inifile
-    parser = ConfigParser()
-    for inifile in inifiles:
-        copy = shutil.copyfile(ROOT_DIR+"/inifiles/"+inifile, destination+"/"+inifile)
-
-        parser.read(copy)
-        parser.set(params_section, params_key, params_value)
-        cfgfile = open(copy, 'w')
-        parser.write(cfgfile, space_around_delimiters=False)  # use flag in case case you need to avoid white space.
-        cfgfile.close()
-
-    shutil.copyfile(ROOT_DIR+"/inifiles/"+params_inifile, destination+"/"+params_inifile)
     # move to new dir
     os.chdir(destination)
 
