@@ -5,7 +5,7 @@ This repo implements a kinematic optimization framework for flows arround moving
 
 To clone this repo use:
 
-    git clone https://github.com/adaptive-cfd/WABBIT-opt.git --recursive
+    git clone git@github.com:adaptive-cfd/WABBIT-opt.git --recursive
 
 Note that if you forgot the --recursive flag you can do:
 
