@@ -5,7 +5,7 @@ This repo implements a kinematic optimization framework for flows arround moving
 
 To clone this repo use:
 
-    git clone https://github.com/adaptive-cfd/WABBIT-opt.git --recursive
+    git clone git@github.com:adaptive-cfd/WABBIT-opt.git --recursive
 
 Note that if you forgot the --recursive flag you can do:
 
@@ -28,3 +28,6 @@ Open terminal and go to the root directory of wabbit-opt and run:
     make
     make conda-env
     conda activate wabbit-opt
+
+If you want to install wabbit-opt on a cluster without direct internet access
+use the [conda-pack](https://conda.github.io/conda-pack/) package.
