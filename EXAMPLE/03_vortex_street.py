@@ -12,18 +12,18 @@ Created on Mon May  3 22:18:56 2021
 # IMPORTED MODULES
 ###############################################################################
 import sys
-sys.path.append('../lib')
+sys.path.append('./LIB/')
+
+
 import numpy as np
 from numpy import exp, mod,meshgrid,pi,sin,size
 import matplotlib.pyplot as plt
-from transforms import transforms
-from sPOD_tools import frame, shifted_POD, shifted_rPCA, build_all_frames
+from LIB.utils import *
+from LIB.sPOD.lib.transforms import transforms
+from LIB.sPOD.lib.sPOD_tools import frame, shifted_POD, shifted_rPCA, build_all_frames
 from scipy.io import loadmat
-from utils import *
-from numpy.fft import fft2,ifft2
-from farge_colormaps import farge_colormap_multi
-from lib.plot_utils import show_animation, save_fig
-from utils import *
+from LIB.sPOD.lib.farge_colormaps import farge_colormap_multi
+from LIB.sPOD.lib.plot_utils import show_animation, save_fig
 import matplotlib
 from os.path import expanduser
 home = expanduser("~")
@@ -45,7 +45,7 @@ plt.close("all")
 dir = home+"/develop/data/two_cylinders/20211018_one_cylinder_moving/"
 dir = home+"/develop/data/two_cylinders/20210927_two_cylinders_a0.25/"
 path = home+"/develop/data/two_cylinders/20211020_pathopt.mat"
-#dir = home+"/develop/data/two_cylinders/20211019_big_domain/"
+dir = ROOT_DIR+"/data/ai_y0_-8.2_-8.2_8.2/ALL.mat"
 
 data = loadmat(path)
 fields = data["data"]
@@ -84,7 +84,7 @@ q = np.zeros(data_shape)
 
 data = q
 q = np.concatenate([ux[::frac,::frac,:],uy[::frac,::frac,:]],axis=-1)
-time = np.concatenate([np.linspace(0, T, Nt),np.linspace(0, T, Nt)],axis=0)
+time_ = np.concatenate([np.linspace(0, T, Nt),np.linspace(0, T, Nt)],axis=0)
 # %%data = np.zeros(data_shape)
 #for tau in range(0,Nt):
 #    data[0,tau,:,:] = curl(np.squeeze(ux[0,tau,:,:]),np.squeeze(uy[0,tau,:,:]))
@@ -93,10 +93,10 @@ time = np.concatenate([np.linspace(0, T, Nt),np.linspace(0, T, Nt)],axis=0)
 
 shift1 = np.zeros([2,2*Nt])
 shift2 = np.zeros([2,2*Nt])
-shift1[0,:] = 0 * time                      # frame 1, shift in x
-shift1[1,:] = 0 * time                      # frame 1, shift in y
-shift2[0,:] = 0 * time                      # frame 2, shift in x
-shift2[1,:] = -(8.2*np.sin(2*pi*freq*time)+8.2*np.sin(4*pi*freq*time)+8.2*np.sin(6*pi*freq*time)) # frame 2, shift in y
+shift1[0,:] = 0 * time_                      # frame 1, shift in x
+shift1[1,:] = 0 * time_                      # frame 1, shift in y
+shift2[0,:] = 0 * time_                      # frame 2, shift in x
+shift2[1,:] = -(8.2*np.sin(2*pi*freq*time_)+8.2*np.sin(4*pi*freq*time_)+8.2*np.sin(6*pi*freq*time_)) # frame 2, shift in y
 
 # %% Create Trafo
 
@@ -142,7 +142,7 @@ E = np.reshape(ret.error_matrix,data_shape)
 
 # %%
 lims = [-1,1]
-nt = 200
+nt = 450
 vort_tilde = fd.rot(qtilde[..., 0, nt],qtilde[..., 0, nt+Nt])
 vort_f1 = fd.rot(qf[0][..., 0, nt],qf[0][..., 0, nt+Nt])
 vort_f2 = fd.rot(qf[1][..., 0, nt],qf[1][..., 0, nt+Nt])

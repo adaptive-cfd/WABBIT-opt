@@ -60,21 +60,37 @@ class finite_diffs:
 
 
 
-def calculate_forces(uxs, uys, chi, dx, dy):
+def calculate_force(u_rel, chi, dX):
     """
-    uxs: relativ x - velocity u_fluid - u_solid
-    uys: relativ y - velocity u_fluid - u_solid
-    chi: mask function multiplied by the penalisation constant
-    dx, dy: lattice spacings
+    u_rel: relativ velocity u_fluid - u_solid
+    chi: mask function multiplied by the inverse penalisation constant
+    dX: array with lattice spacings
     """
+    force = np.sum(np.sum(u_rel*chi)) * np.prod(dX)
+    return force
 
-    forcex = np.sum(np.sum(uxs*chi)) * dx * dy
-    frocey = np.sum(np.sum(uys*chi)) * dx * dy
-
-    return forcex, frocey
-
+def opt_goal_lift_drag(mu_vec, u_ROM_fun, give_mask, dX, uy_solid):
+    """
+       This routine defines the optimization goal of the kinematic optimization.
+       We optimize drag or lift, depending if the input is ux (drag) or uy (lift).
+    """
+    u_tilde = u_ROM_fun(mu_vec)
+    chi = give_mask(mu_vec)
+    force = 0
+    uys = uy_solid(mu_vec)
+    for nt, us in enumerate(uys):
+        u_rel = u_tilde[...,nt] - us
+        force += calculate_force(u_rel, chi[...,nt], dX)
+    print(force)
+    return force
 
 def bin_array(num, m):
     """Convert a positive integer num into an m-bit bit vector"""
     return np.flip(np.array(list(np.binary_repr(num).zfill(m))).astype(np.int8))
 
+def smoothstep(x,t,h):
+    x0 = t - h
+    x1 = t + h
+    dist = np.where((x0<x) & (x<x1)  , 0.5*(1+np.cos((x-x0)*np.pi/(2*h))),np.zeros_like(x))
+    dist = np.where(x<=x0, 1, dist)
+    return dist
