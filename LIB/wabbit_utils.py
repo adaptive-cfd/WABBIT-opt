@@ -42,7 +42,7 @@ def run_wabbit(params_dict, params_inifile, mpicommand, memory, save_log=True, d
     c = mpicommand + " " + \
         "wabbit " + params_inifile + " " + memory
     if save_log:
-        c += " > "+ dirname+".log"
+        c += " > "+ dirname+".log &"
 
     # execute FOM
     success = 1
