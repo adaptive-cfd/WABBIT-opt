@@ -75,6 +75,24 @@ def interpolate_POD_states(q, mu_points, D,Nsamples, Nt, mu_vec, Nmodes):
 
     return U[:, :Nmodes] @ VT_interp
 
+
+def training_data(sPOD_frames, mu_vecs, t):
+    param = np.zeros((mu_vecs.shape[0] + 1, Nt * mu_vecs.shape[1]))
+    for i in range(int(mu_vecs.shape[0]) - 1):
+        for j in range(int(mu_vecs.shape[1])):
+            param[i, j * Nt: (j + 1) * Nt] = mu_vecs[i, j]
+            param[-1, j * Nt: (j + 1) * Nt] = t
+    num_frames = 2
+    S = []
+    M = []
+    for nf in range(num_frames):
+        S.append(sPOD_frames[nf].build_field())
+        M.append(param)
+
+    np.save('frames.npy', S, allow_pickle=True)
+    np.save('params.npy', M, allow_pickle=True)
+
+
 if __name__ == "__main__":
     ##########################################
     # %% Define your DATA:
@@ -176,6 +194,12 @@ if __name__ == "__main__":
     ret = shifted_rPCA(q, trafos, nmodes_max = np.max(nmodes)+10, eps=1e-16, Niter=500, use_rSVD=True, mu = mu,lambd = 0.1)
     #ret  = shifted_POD(q, trafos, nmodes, eps=1e-16, Niter=400, use_rSVD = False)
     sPOD_frames, qtilde, rel_err = ret.frames, ret.data_approx, ret.rel_err_hist
+
+    # Save the snapshot and parameter matrices for training.
+    training_data(sPOD_frames, mu_vecs, t)
+    S = np.load('frames.npy', allow_pickle=True)
+    M = np.load('params.npy', allow_pickle=True)
+
     ###########################################
     # %% results sPOD frames
     ##########################################
