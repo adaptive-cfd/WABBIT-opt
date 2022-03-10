@@ -7,3 +7,6 @@
 [submodule "LIB/from_fourier_to_koopman"]
 	path = LIB/from_fourier_to_koopman
 	url = git@github.com:helange23/from_fourier_to_koopman.git
+[submodule "LIB/MLbasedModelReduction"]
+	path = LIB/MLbasedModelReduction
+	url = https://github.com/shubhadityaburela/MLbasedModelReduction.git
