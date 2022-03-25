@@ -19,10 +19,8 @@ from numpy.linalg import norm
 import matplotlib.pyplot as plt
 from sklearn.utils import extmath
 import os
-import numpy as np
 from numpy import exp, mod, meshgrid
 from numpy.linalg import norm
-import matplotlib.pyplot as plt
 from transforms import transforms
 from scipy.fft import fft
 
@@ -117,83 +115,82 @@ if __name__ == "__main__":
     ##########################################
     # %% Define your DATA:
     ##########################################
-    # plt.close("all")
-    # Nx = 800  # number of grid points in x
-    # Nt = 400  # numer of time intervalls
-    #
-    # T = 0.5  # total time
-    # L = 1  # total domain size
-    # sigma = 0.015 * L  # standard diviation of the puls
-    # nmodes = 4  # reduction of singular values
-    # D = nmodes
-    # x = np.arange(-Nx // 2, Nx // 2) / Nx * L
-    # t = np.arange(0, Nt) / Nt * T
-    # dx = x[1] - x[0]
-    # dt = t[1] - t[0]
-    # c = 1
-    # [Xgrid, Tgrid] = meshgrid(x, t)
-    # Xgrid = Xgrid.T
-    # Tgrid = Tgrid.T
-    # # mu_vecs = 0.2*L*np.eye(Nt,D)
-    # mu_max = 0.4 * L
-    # # mu_vecs = np.concatenate([mu_max*np.eye(Nt,D), -mu_max*np.eye(Nt,D)],axis=1)
-    # mu_vecs = np.asarray([(bin_array(i, D) * 2 - np.ones(D)) * mu_max for i in range(2 ** D)]).T
-    # Nsamples = np.size(mu_vecs, 1)
-    #
-    #
-    # def create_FOM_data(D, L, Xgrid, Tgrid, T, mu_vecs):
-    #     from scipy.special import eval_hermite
-    #
-    #     # gauss hermite polynomials of order n
-    #     psi = lambda n, x: (2 ** n * np.math.factorial(n) * np.sqrt(np.pi)) ** (-0.5) * np.exp(
-    #         -x ** 2 / 2) * eval_hermite(
-    #         n, x)
-    #     Nsamples = np.size(mu_vecs, 1)
-    #     w = 0.015 * L
-    #     Nt = np.size(Tgrid, 1)
-    #     s = np.zeros([Nt, Nsamples])
-    #     s[:4, :] = mu_vecs
-    #     shifts = [np.asarray([fft(s[:, n]).imag]) for n in range(Nsamples)]
-    #     qs1 = []
-    #     qs2 = []
-    #     for k in range(Nsamples):  # loop over all possible mu vectors
-    #         q1 = np.zeros_like(Xgrid)
-    #         q2 = np.zeros_like(Xgrid)
-    #         print(k)
-    #         for n in range(D):  # loop over all components of the vector
-    #             q1 += np.exp(-n / 3) * np.sin(2 * np.pi * Tgrid / T * (n + 1)) * psi(n, (
-    #                     Xgrid + 0.1 * L) / w)
-    #             q2 += np.exp(-n / 3) * np.sin(2 * np.pi * Tgrid / T * (n + 1)) * psi(n, (
-    #                     Xgrid - 0.1 * L) / w)
-    #
-    #         qs1.append(q1)
-    #         qs2.append(-q2)
-    #
-    #     q1 = np.concatenate(qs1, axis=1)
-    #     q2 = np.concatenate(qs2, axis=1)
-    #     q_frames = [q1, q2]
-    #
-    #     shifts = [np.concatenate(shifts, axis=1), -np.concatenate(shifts, axis=1)]
-    #     data_shape = [Nx, 1, 1, Nt * Nsamples]
-    #     trafos = [transforms(data_shape, [L], shifts=shifts[0], dx=[dx], use_scipy_transform=True),
-    #               transforms(data_shape, [L], shifts=shifts[1], dx=[dx], use_scipy_transform=True)]
-    #
-    #     q = 0
-    #     for trafo, qf in zip(trafos, q_frames):
-    #         q += trafo.apply(qf)
-    #
-    #     return q, q1, q2, shifts, trafos
-    #
-    #
-    # q, q1, q2, shifts, trafos = create_FOM_data(16, L, Xgrid, Tgrid, T, mu_vecs)
-    #
-    # Ntest = 16
-    # mu_test = (2 * np.random.random([D, Ntest]) - 1.0) * mu_max  # [0
-    # Qtest, qtest1, qtest2, _, _ = create_FOM_data(16, L, Xgrid, Tgrid, T, mu_test)
-    #
-    # network_data(mu_vecs, mu_test, q1, q2, qtest1, qtest2, t)
-    #
-    # sys.exit()
+    plt.close("all")
+    Nx = 800  # number of grid points in x
+    Nt = 400  # numer of time intervalls
+
+    T = 0.5  # total time
+    L = 1  # total domain size
+    sigma = 0.015 * L  # standard diviation of the puls
+    nmodes = 4  # reduction of singular values
+    D = nmodes
+    x = np.arange(-Nx // 2, Nx // 2) / Nx * L
+    t = np.arange(0, Nt) / Nt * T
+    dx = x[1] - x[0]
+    dt = t[1] - t[0]
+    c = 1
+    [Xgrid, Tgrid] = meshgrid(x, t)
+    Xgrid = Xgrid.T
+    Tgrid = Tgrid.T
+    # mu_vecs = 0.2*L*np.eye(Nt,D)
+    mu_max = 0.4 * L
+    # mu_vecs = np.concatenate([mu_max*np.eye(Nt,D), -mu_max*np.eye(Nt,D)],axis=1)
+    mu_vecs = np.asarray([(bin_array(i, D) * 2 - np.ones(D)) * mu_max for i in range(2 ** D)]).T
+    Nsamples = np.size(mu_vecs, 1)
+
+
+    def create_FOM_data(D, L, Xgrid, Tgrid, T, mu_vecs):
+        from scipy.special import eval_hermite
+
+        # gauss hermite polynomials of order n
+        psi = lambda n, x: (2 ** n * np.math.factorial(n) * np.sqrt(np.pi)) ** (-0.5) * np.exp(
+            -x ** 2 / 2) * eval_hermite(
+            n, x)
+        Nsamples = np.size(mu_vecs, 1)
+        w = 0.015 * L
+        Nt = np.size(Tgrid, 1)
+        s = np.zeros([Nt, Nsamples])
+        s[:4, :] = mu_vecs
+        shifts = [np.asarray([fft(s[:, n]).imag]) for n in range(Nsamples)]
+        qs1 = []
+        qs2 = []
+        for k in range(Nsamples):  # loop over all possible mu vectors
+            q1 = np.zeros_like(Xgrid)
+            q2 = np.zeros_like(Xgrid)
+            print(k)
+            for n in range(D):  # loop over all components of the vector
+                q1 += np.exp(-n / 3) * np.sin(2 * np.pi * Tgrid / T * (n + 1)) * psi(n, (
+                        Xgrid + 0.1 * L) / w)
+                q2 += np.exp(-n / 3) * np.sin(2 * np.pi * Tgrid / T * (n + 1)) * psi(n, (
+                        Xgrid - 0.1 * L) / w)
+
+            qs1.append(q1)
+            qs2.append(-q2)
+
+        q1 = np.concatenate(qs1, axis=1)
+        q2 = np.concatenate(qs2, axis=1)
+        q_frames = [q1, q2]
+
+        shifts = [np.concatenate(shifts, axis=1), -np.concatenate(shifts, axis=1)]
+        data_shape = [Nx, 1, 1, Nt * Nsamples]
+        trafos = [transforms(data_shape, [L], shifts=shifts[0], dx=[dx], use_scipy_transform=True),
+                  transforms(data_shape, [L], shifts=shifts[1], dx=[dx], use_scipy_transform=True)]
+
+        q = 0
+        for trafo, qf in zip(trafos, q_frames):
+            q += trafo.apply(qf)
+
+        return q, q1, q2, shifts, trafos
+
+
+    q, q1, q2, shifts, trafos = create_FOM_data(16, L, Xgrid, Tgrid, T, mu_vecs)
+
+    Ntest = 16
+    mu_test = (2 * np.random.random([D, Ntest]) - 1.0) * mu_max  # [0
+    Qtest, qtest1, qtest2, _, _ = create_FOM_data(16, L, Xgrid, Tgrid, T, mu_test)
+
+    network_data(mu_vecs, mu_test, q1, q2, qtest1, qtest2, t)
+
 
     #############################################################
     ## ML section
@@ -230,11 +227,11 @@ if __name__ == "__main__":
         'typeConv': '1D'
     }
 
-    # POD_DL_ROM = TrainingFramework(params, split=0.67)
-    # POD_DL_ROM.training(epochs=50, save_every=10, print_every=10)
-    #
-    # sys.exit()
+    POD_DL_ROM = TrainingFramework(params, split=0.67)
+    POD_DL_ROM.training(epochs=50, save_every=10, print_every=10)
 
+    ############################################################
+    # Testing Section
     testing_method = 'weight_based'
     if testing_method == 'model_based':
         log_folder_base = 'training_results_local/'

@@ -93,6 +93,9 @@ if __name__ == "__main__":
 
         nf = nf + 1
 
+
+    ############################################################
+    # Testing Section
     testing_method = 'weight_based'
     if testing_method == 'model_based':
         log_folder_base = 'training_results_local/'
