@@ -3,6 +3,7 @@ import sys
 import matplotlib.pyplot as plt
 import pathlib
 import os
+from sklearn.utils import extmath
 
 sys.path.append('./../LIB/MLbasedModelReduction/POD_DL_ROM_LIB/')
 sys.path.append('./../LIB/sPOD/lib/')
@@ -13,7 +14,7 @@ from transforms import transforms
 from scipy.fft import fft
 
 
-def prediction_error(sPOD_frames, frame_amplitude_list, D, Nx, Nt, mu_vec):
+def snapshot_prediction(sPOD_frames, frame_amplitude_list, D, Nx, Nt, mu_vec):
     s = np.zeros(Nt)
     s[:D] = mu_vec[:D, 0]
     shifts = np.asarray([fft(s).imag])
@@ -48,6 +49,9 @@ if __name__ == "__main__":
     time_amplitudes = np.load(log_dir + 'time_amplitudes.npy', allow_pickle=True)
     NumModesPerFrame = np.load(log_dir + 'NumModesPerFrame.npy', allow_pickle=True)
     snapshot_test = np.load(log_dir + 'snapshot_test.npy', allow_pickle=True)
+    snapshot_test_frame = np.load(log_dir + 'snapshot_test_frame.npy', allow_pickle=True)
+    snapshot_train = np.load(log_dir + 'snapshot_train.npy', allow_pickle=True)
+    snapshot_train_frame = np.load(log_dir + 'snapshot_train_frame.npy', allow_pickle=True)
 
     dict_test = []
     nf = 0
@@ -70,7 +74,6 @@ if __name__ == "__main__":
             'num_test_samples': Params_test[nf].shape[1],  # N_test x N_t
             'batch_size': 400,
             'num_early_stop': 1500,  # Number of epochs for the early stopping
-            'restart': None,  # true if restart is selected
             'scaling': True,  # true if the data should be scaled
             'perform_svd': 'randomized',  # '', 'normal', 'randomized'
             'learning_rate': 0.0005,  # eta  0.001
@@ -80,12 +83,11 @@ if __name__ == "__main__":
             'num_dimension': 1,  # Number of channels (d)
             'omega_h': 0.8,
             'omega_N': 0.2,
-            'n_h': None,
             'typeConv': '1D'  # Type of convolutional layer for the network : '1D' or '2D'
         }
 
-        train_model = TrainingFramework(dict_network)
-        train_model.training(epochs=10, val_every=1, save_every=1, print_every=1)
+        train_model = TrainingFramework(dict_network, split=0.67)
+        train_model.training(epochs=100, save_every=1, print_every=1)
 
         dict_test.append(dict_network)
 
@@ -93,7 +95,7 @@ if __name__ == "__main__":
 
     testing_method = 'weight_based'
     if testing_method == 'model_based':
-        log_folder_base = 'trained_models/'
+        log_folder_base = 'training_results_local/'
         num_frame_models = nf
         log_folder_trained_model = []
         for num_frame in range(num_frame_models):
@@ -105,7 +107,6 @@ if __name__ == "__main__":
         # Testing for each frame
         for frame, folder_name in enumerate(log_folder_trained_model):
             # Testing for each snapshot
-            rel_err = np.ones(NumSnapshots)
             pt = dict_test[frame]['parameter_test']
             for sp in range(NumSnapshots):
                 dict_test[frame]['parameter_test'] = pt[:, sp * Nt:(sp + 1) * Nt]
@@ -125,7 +126,6 @@ if __name__ == "__main__":
         # Testing for each frame
         for frame, folder_name in enumerate(log_folder_trained_model):
             # Testing for each snapshot
-            rel_err = np.ones(NumSnapshots)
             pt = dict_test[frame]['parameter_test']
             for sp in range(NumSnapshots):
                 dict_test[frame]['parameter_test'] = pt[:, sp * Nt:(sp + 1) * Nt]
@@ -133,38 +133,54 @@ if __name__ == "__main__":
                 test_model.testing(log_folder_trained_model=str(folder_name), testing_method='weight_based')
                 time_amplitudes_predicted.append(test_model.time_amplitude_test_output)
 
+    if dict_test[0]['FOM']:
+        U_train = []
+        for nf in range(num_frame_models):
+            U, _, _ = extmath.randomized_svd(snapshot_train_frame[nf],
+                                             n_components=dict_test[nf]['reduced_order_model_dimension'],
+                                             transpose=False,
+                                             flip_sign=False, random_state=123)
+            U_train.append(U)
+
     # Plotting and analysis
-    rel_err = np.ones(NumSnapshots)
     for sp in range(NumSnapshots):
-        time_amplitudes_list = []
+        time_amplitudes_predicted_list = []
+        time_amplitudes_actual_list = []
         for frame in range(num_frame_models):
-            time_amplitudes_list.append(time_amplitudes_predicted[sp + frame * NumSnapshots])
+            VT = np.matmul(U_train[frame].transpose(), snapshot_test_frame[frame][:, sp * Nt:(sp + 1) * Nt])
+            time_amplitudes_actual_list.append(VT)
+            time_amplitudes_predicted_list.append(time_amplitudes_predicted[sp + frame * NumSnapshots])
+            num = np.sqrt(
+                np.mean(np.linalg.norm(VT - time_amplitudes_predicted[sp + frame * NumSnapshots], 2, axis=1) ** 2))
+            den = np.sqrt(np.mean(np.linalg.norm(VT, 2, axis=1) ** 2))
+            print("Relative time amplitude error indicator for snapshot:{} and frame:{} is {}".format(sp, frame,
+                                                                                                      num / den))
+            if dict_test[frame]['FOM']:
+                Q_recon = np.matmul(U_train[frame], VT)
+                num = np.sqrt(np.mean(np.linalg.norm(snapshot_test_frame[frame][:, sp * Nt:(sp + 1) * Nt] - Q_recon, 2, axis=1) ** 2))
+                den = np.sqrt(np.mean(np.linalg.norm(snapshot_test_frame[frame][:, sp * Nt:(sp + 1) * Nt], 2, axis=1) ** 2))
+                print("Relative snapshot error indicator for reconstructed snapshot:{} and frame:{} is {}".format(sp, frame, num / den))
 
-        qtilde = prediction_error(sPOD_frames, time_amplitudes_predicted, D, Nx, Nt,
-                                  Params_test[0][:D, sp * Nt:(sp + 1) * Nt])
-        Qmax = np.max(snapshot_test)
-        Qmin = np.min(snapshot_test)
-        num = np.sqrt(np.mean(np.linalg.norm(snapshot_test[:, sp * Nt:(sp + 1) * Nt] - np.squeeze(qtilde), 2, axis=1) ** 2))
+        qtilde = snapshot_prediction(sPOD_frames, time_amplitudes_predicted_list, D, Nx, Nt,
+                                     Params_test[0][:D, sp * Nt:(sp + 1) * Nt])
+        num = np.sqrt(
+            np.mean(np.linalg.norm(snapshot_test[:, sp * Nt:(sp + 1) * Nt] - np.squeeze(qtilde), 2, axis=1) ** 2))
         den = np.sqrt(np.mean(np.linalg.norm(snapshot_test[:, sp * Nt:(sp + 1) * Nt], 2, axis=1) ** 2))
-        rel_err[sp] = num / den
-        print(rel_err[sp])
+        print("Relative NN reconstruction error indicator for snapshot:{} is {}".format(sp, num / den))
 
+        print("\n")
+
+        Qmax = np.max(snapshot_test[:, sp * Nt:(sp + 1) * Nt])
+        Qmin = np.min(snapshot_test[:, sp * Nt:(sp + 1) * Nt])
         fig, axs = plt.subplots(1, 2, num=11, sharey=True, figsize=(10, 4))
         axs[0].pcolormesh(np.squeeze(qtilde), vmin=Qmin, vmax=Qmax)
         axs[0].set_ylabel(r'space $x$')
         axs[0].set_xlabel(r'time $t$')
         axs[0].set_title(r"NN")
 
-        # approximation
         axs[1].pcolormesh(snapshot_test[:, sp * Nt:(sp + 1) * Nt], vmin=Qmin, vmax=Qmax)
         axs[1].set_ylabel(r'$i=1,\dots,M$')
         axs[1].set_xlabel(r'time $t$')
         axs[1].set_title(r"Data")
         # plt.tight_layout()
         # plt.show()
-
-    err_var = np.var(rel_err, axis=0)
-    err_mean = np.mean(rel_err, axis=0)
-
-    print(err_var, err_mean)
-

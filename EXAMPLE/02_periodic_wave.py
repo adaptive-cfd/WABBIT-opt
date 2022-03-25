@@ -86,8 +86,7 @@ def interpolate_POD_states(q, mu_points, D, Nsamples, Nt, mu_vec, Nmodes):
 
     return U[:, :Nmodes] @ VT_interp
 
-
-def network_data(sPOD_frames, mu_vecs, mu_vecs_test, frame_amplitude_list_training, Qtest, t):
+def network_data(sPOD_frames, mu_vecs, mu_vecs_test, frame_amplitude_list_training, Qtrain, qtrain1, qtrain2, Qtest, qtest1, qtest2, t):
     param_train = np.zeros((mu_vecs.shape[0] + 1, Nt * mu_vecs.shape[1]))
     param_test = np.zeros((mu_vecs_test.shape[0] + 1, Nt * mu_vecs_test.shape[1]))
     for i in range(int(mu_vecs.shape[0])):
@@ -111,6 +110,9 @@ def network_data(sPOD_frames, mu_vecs, mu_vecs_test, frame_amplitude_list_traini
         NumModesPerFrame.append(frame.Nmodes)
         nf = nf + 1
 
+    qtest_frame_wise = [qtest1, qtest2]
+    qtrain_frame_wise = [qtrain1, qtrain2]
+
     np.save(datapath + "frames.npy", sPOD_frames, allow_pickle=True)
     np.save(datapath + "U_matrix.npy", U, allow_pickle=True)
     np.save(datapath + "params_train.npy", M_train, allow_pickle=True)
@@ -118,6 +120,9 @@ def network_data(sPOD_frames, mu_vecs, mu_vecs_test, frame_amplitude_list_traini
     np.save(datapath + "time_amplitudes.npy", frame_amplitude_list_training, allow_pickle=True)
     np.save(datapath + "NumModesPerFrame.npy", NumModesPerFrame, allow_pickle=True)
     np.save(datapath + "snapshot_test.npy", Qtest, allow_pickle=True)
+    np.save(datapath + "snapshot_test_frame.npy", qtest_frame_wise, allow_pickle=True)
+    np.save(datapath + "snapshot_train.npy", Qtrain, allow_pickle=True)
+    np.save(datapath + "snapshot_train_frame.npy", qtrain_frame_wise, allow_pickle=True)
 
     pass
 
@@ -326,7 +331,7 @@ if __name__ == "__main__":
     fig = plt.figure(6)
     Ntest = 16
     mu_test = (2 * np.random.random([D, Ntest]) - 1.0) * mu_max  # [0
-    Qtest, _, _, _, _ = create_FOM_data(D, L, Xgrid, Tgrid, T, mu_test)
+    Qtest, qtest1, qtest2, _, _ = create_FOM_data(D, L, Xgrid, Tgrid, T, mu_test)
 
     qnorm = norm(Qtest, ord="fro")
     rel_err_list = []
@@ -398,9 +403,9 @@ if __name__ == "__main__":
         np.reshape(my_interpolated_state(sPOD_frames, frame_amplitude_list, mu_vecs, D, Nx, Nt, mu), [Nx, Nt]))
     opt_fun_FOM = lambda mu: opt_goal(
         np.reshape(create_FOM_data(D, L, Xgrid, Tgrid, T, np.reshape(mu, [D, 1]))[0], [Nx, Nt]))
-    ###########################################
-    # %% optimize with global optimizer
-    ##########################################
+    # ###########################################
+    # # %% optimize with global optimizer
+    # ##########################################
 
     bounds = lambda **kwargs: np.all(np.abs(kwargs["x_new"]) < mu_max)
     bounds_i = [(-mu_max, mu_max)] * D
@@ -452,4 +457,4 @@ if __name__ == "__main__":
     #############################
     # Training Data capturing
     # Save the snapshot and parameter matrices for training.
-    network_data(sPOD_frames, mu_vecs, mu_test, frame_amplitude_list_training, Qtest, t)
+    network_data(sPOD_frames, mu_vecs, mu_test, frame_amplitude_list_training, q, q1, q2, Qtest, qtest1, qtest2, t)
