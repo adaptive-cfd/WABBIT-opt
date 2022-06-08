@@ -228,9 +228,11 @@ if __name__ == "__main__":
     fig.savefig(impath + "1Dwaves.png", dpi=600, transparent=True)
     #
     #
+    #ret  = shifted_POD(q, trafos, nmodes, eps=1e-16, Niter=400, use_rSVD = False)
     mu = np.prod(np.shape(q)) / (4 * np.sum(np.abs(q))) * 0.001
     ret = shifted_rPCA(q, trafos, nmodes_max=np.max(nmodes) + 10, eps=1e-16, Niter=500, use_rSVD=True, mu=mu, lambd=0.1)
     # ret  = shifted_POD(q, trafos, nmodes, eps=1e-16, Niter=400, use_rSVD = False)
+
     sPOD_frames, qtilde, rel_err = ret.frames, ret.data_approx, ret.rel_err_hist
     ###########################################
     # %% results sPOD frames
@@ -345,8 +347,10 @@ if __name__ == "__main__":
             qtilde = my_interpolated_state(sPOD_frames, frame_amplitude_list, mu_vecs, D, Nx, Nt, mu_test[:D, i])
             qnorm = norm(Qtest[:, i * Nt:Nt * (i + 1)], ord="fro")
             rel_err[i, r] = norm(Qtest[:, i * Nt:Nt * (i + 1)] - np.squeeze(qtilde), ord="fro") / qnorm
-            qtilde = interpolate_POD_states(q, mu_vecs, D, Nsamples, Nt, mu_test[:D, i], 2 * r)
-            rel_err_POD[i, r] = norm(Qtest[:, i * Nt:Nt * (i + 1)] - np.squeeze(qtilde), ord="fro") / qnorm
+            qtilde = interpolate_POD_states(q, mu_vecs, D,Nsamples, Nt, mu_test[:D, i], 2*r)
+            rel_err_POD[i,r] = norm(Qtest[:, i * Nt:Nt * (i + 1)] - np.squeeze(qtilde), ord="fro") / qnorm
+            print("rank: %d prediction error sPOD: %f, POD: %f"%(2*r, rel_err[i, r], rel_err_POD[i,r]))
+
 
     dofs = np.arange(0, np.max(nmodes) + 2)
     err_var = np.var(rel_err_POD, axis=0)
@@ -364,7 +368,11 @@ if __name__ == "__main__":
 
     plt.rcParams.update({"font.size": 16})
 
+
+# %%
+
     fig, axs = plt.subplots(1, 3, num=11, sharey=True, figsize=(10, 3))
+
 
     qtilde = my_interpolated_state(sPOD_frames, frame_amplitude_list, mu_vecs, D, Nx, Nt, mu_test[:D, 0])
     axs[0].pcolormesh(np.squeeze(qtilde), cmap=cm, vmin=qmin, vmax=qmax, )

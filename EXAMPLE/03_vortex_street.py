@@ -1,233 +1,198 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-MOVING CYLINDERS VORTEX STREET
-
-Created on Mon May  3 22:18:56 2021
-
-@author: miriam
+Note this routine generates Nsamples folder in the data directory, clones wabbit into them and
+runs wabbit for the different parameters. You may want to change the MPI_COMMAND for cluster or
+desktop settings.
 """
 
-###############################################################################
-# IMPORTED MODULES
-###############################################################################
+# uncomment to execute script:
+# from LIB.run_FOM
+
+
+"""
+Load the statevector and mask function
+"""
 import sys
-sys.path.append('./LIB/')
-
-
+sys.path.append('./../LIB/')
+from LIB.ROM_utils import my_interpolated_state
+from numpy import concatenate
+from LIB.IO import read_ACM_dat
+from LIB.IO import load_trajectories
+from IPython.display import HTML
 import numpy as np
-from numpy import exp, mod,meshgrid,pi,sin,size
-import matplotlib.pyplot as plt
-from LIB.utils import *
-from LIB.sPOD.lib.transforms import transforms
-from LIB.sPOD.lib.sPOD_tools import frame, shifted_POD, shifted_rPCA, build_all_frames
-from scipy.io import loadmat
-from LIB.sPOD.lib.farge_colormaps import farge_colormap_multi
+from numpy import reshape, size, concatenate, shape, meshgrid
 from LIB.sPOD.lib.plot_utils import show_animation, save_fig
-import matplotlib
-from os.path import expanduser
-home = expanduser("~")
+from LIB.utils import finite_diffs
+from farge_colormaps import farge_colormap_multi
+import matplotlib.pyplot as plt
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.size": 16,
+    "font.family": "serif",
+    "font.serif": ["Computer Modern"]})
 
-font = {'family' : 'normal',
-        'weight' : 'bold',
-        'size'   : 24}
+cm = farge_colormap_multi(type='vorticity', etalement_du_zero=0.02,limite_faible_fort=0.15)
 
-matplotlib.rc('font', **font)
-###############################################################################
-cm = farge_colormap_multi( etalement_du_zero=0.2, limite_faible_fort=0.5)
-#from sympy.physics.vector import curl
-###############################################################################
+data_path = "../data/"
+frac = 2
+time_frac=20
+_, ux1, dX, time_list1, mu_vec_list1, L = load_trajectories(data_path,["ux","uy","dx","time","mu","domain_size"],
+                                                               params_id_regex = "ai_y0_8.2*", sample_fraction=frac, time_sample_fraction=time_frac)
 
-##########################################
-#% Define your DATA:
-##########################################
-plt.close("all")
-dir = home+"/develop/data/two_cylinders/20211018_one_cylinder_moving/"
-dir = home+"/develop/data/two_cylinders/20210927_two_cylinders_a0.25/"
-path = home+"/develop/data/two_cylinders/20211020_pathopt.mat"
-dir = ROOT_DIR+"/data/ai_y0_-8.2_-8.2_8.2/ALL.mat"
+_, ux2, dX, time_list2, mu_vec_list2, L = load_trajectories(data_path,["ux","uy","dx","time","mu","domain_size"],
+                                                               params_id_regex = "ai_y0_4.0*", sample_fraction=frac, time_sample_fraction=time_frac)
+ux =concatenate([*ux1,*ux2],axis=2)
+ux2,ux1 = None, None
+#uy = concatenate([*uy1,*uy2],axis=2)
+uy1, uy2 = None, None
+time_list = [*time_list1,*time_list2]
+mu_vec_list = [*mu_vec_list1, *mu_vec_list2]
+time = time_list[0]
+time_joint = concatenate(time_list)
 
-data = loadmat(path)
-fields = data["data"]
-mask = fields[0,...].T
-p = fields[1,...].T
-ux = fields[2,...].T
-uy = fields[3,...].T
-time = data["time"].flatten()
-time = time - time[0]
 # %%
 
-Nt = len(time)                      # Number of time intervalls
-Nvar = 1# data.shape[0]                    # Number of variables
-nmodes = [40,40]                              # reduction of singular values
-frac = 4
-
-
-Ngrid = [fields.shape[2]//frac, fields.shape[3]//frac]  # number of grid points in x
-data_shape = [*Ngrid,Nvar,2*Nt]
-               # size of time intervall
-freq    = 0.01/5
-L = data["domain_size"][0]   # total domain size
-T = time[-1]
-x,y = (np.linspace(0, L[i], Ngrid[i]) for i in range(2))
-dX = (x[1]-x[0],y[1]-y[0])
-dt = time[1]-time[0]
+import matplotlib.pyplot as plt
+# quantities
+Ngrid = shape(ux[...,0])
+Nt = len(time)
+matr = lambda dat: np.reshape(dat,[-1,np.size(dat,-1)])
+freq0 = 0.2e-2
+x,y = (np.linspace(0, L[i]-dX[i], Ngrid[i]) for i in range(2))
 [Y,X] = meshgrid(y,x)
-fd = finite_diffs(Ngrid,dX)
+# build snapshotmatrix
+#uy[:,Ngrid[1]//2,:]=10
+#ux[:,Ngrid[1]//2,:]=10
+Q = np.concatenate([matr(ux)],axis=0)
+ux = None
+time_joint = concatenate([*time_list])
+Nsnapshots = size(Q,-1)
+Nsamples = Nsnapshots//Nt//2 # devided by two since Q has ux, and uy in columns not in rows
+print("(Nx, Ny) =", Ngrid )
+print("Timesamples =", Nt )
+print("Nsamples = ", Nsamples )
+print("Nsnapshots = ", Nsnapshots )
 
-vort= np.asarray([fd.rot(ux[::frac,::frac, nt],uy[::frac,::frac,nt]) for nt in range(np.size(ux,2))])
-vort = np.moveaxis(vort,0,-1)
-q = np.zeros(data_shape)
-#for nvar in range(Nvar):
-#for it,t in enumerate(time):
-#    q[:,:,0,it] = np.array(data[0,it,::frac,::frac]).T
+# fd = finite_diffs(Ngrid,dX)
+# vort= np.asarray([fd.rot(ux[...,nt],uy[...,nt]) for nt in range(np.size(ux,2))])
+# vort = np.moveaxis(vort,0,-1)
+#show_animation(np.squeeze(vort),Xgrid=[X,Y],frequency=4,vmin=-2,vmax=2)
+# %%
+from numpy import sin,cos,pi
 
-data = q
-q = np.concatenate([ux[::frac,::frac,:],uy[::frac,::frac,:]],axis=-1)
-time_ = np.concatenate([np.linspace(0, T, Nt),np.linspace(0, T, Nt)],axis=0)
-# %%data = np.zeros(data_shape)
-#for tau in range(0,Nt):
-#    data[0,tau,:,:] = curl(np.squeeze(ux[0,tau,:,:]),np.squeeze(uy[0,tau,:,:]))
+def path(mu_vec, time, freq):
+    d2 = 0
+    for k in range(len(mu_vec)):
+        d2 += mu_vec[k] * sin(2 *(k+1)* pi * freq * time)
+    return d2
+def dpath(mu_vec, time , freq):
+    d2dot = 0
+    for k in range(len(mu_vec)):
+        d2dot += 2 *(k+1)* pi * freq * mu_vec[k] * cos(2 *(k+1)* pi * freq * time)
+    return d2dot
 
-               # size of time intervall
+def give_shift(time,x, mu_vec, freq):
+    shift = np.zeros([len(x),len(time)])
+    for it,t in enumerate(time):
+        shift[...,it] = path(mu_vec,np.heaviside(x,0)*(x)-t,freq)
+    return shift
+shift1 = np.zeros([2,np.prod(Ngrid),Nsnapshots])
+shift2 = np.zeros([2,np.prod(Ngrid),Nsnapshots])
+# shift1 = np.zeros([2,Nsnapshots])
+# shift2 = np.zeros([2,Nsnapshots])
 
-shift1 = np.zeros([2,2*Nt])
-shift2 = np.zeros([2,2*Nt])
-shift1[0,:] = 0 * time_                      # frame 1, shift in x
-shift1[1,:] = 0 * time_                      # frame 1, shift in y
-shift2[0,:] = 0 * time_                      # frame 2, shift in x
-shift2[1,:] = -(8.2*np.sin(2*pi*freq*time_)+8.2*np.sin(4*pi*freq*time_)+8.2*np.sin(6*pi*freq*time_)) # frame 2, shift in y
+# shift1[0,:] = 0 * time_joint                      # frame 1, shift in x
+# shift1[1,:] = 0 * time_joint                      # frame 1, shift in y
+# shift2[0,:] = 0 * time_joint                      # frame 2, shift in x
+y_shifts =[]
+dy_shifts = []
+for mu_vec in mu_vec_list:
+     y_shifts.append(give_shift(time,X.flatten()-L[0]/2, mu_vec, freq0))
+     #y_shifts.append(-path(mu_vec, time, freq0)) # frame 2, shift in y
+     dy_shifts.append(dpath(mu_vec, time, freq0))  # frame 2, shift in y
+dy_shifts = np.concatenate([*dy_shifts],axis=-1)
+shift2[1,...] = np.concatenate([*y_shifts],axis=-1)
 
-# %% Create Trafo
 
+# %%
+from numpy.linalg import norm
+from LIB.sPOD.lib.transforms import transforms
+
+class ACM_transforms(transforms):
+    def __init__(self, data_shape, domain_size, trafo_type="shift", shifts = None, dshifts =None,\
+                 dx = None, rotations=None, rotation_center = None, use_scipy_transform = False):
+        super().__init__(data_shape, domain_size, trafo_type, shifts , dx,
+                         rotations, rotation_center , use_scipy_transform )
+        self.dshifts = dshifts
+
+    def apply(self, frame_field):
+        lab_field = super().apply(frame_field) #+ self.dshifts
+        return lab_field
+
+    def reverse(self, lab_field):
+        frame_field = super().reverse(lab_field) #- self.dshifts
+        return frame_field
+
+
+
+data_shape = [*Ngrid,1,Nsnapshots]
+# first trafo is the identity
 shift_trafo_1 = transforms(data_shape,L, shifts = shift1,trafo_type="identity", dx = dX, use_scipy_transform=False )
-shift_trafo_2 = transforms(data_shape,L, shifts = shift2, dx = dX, use_scipy_transform=True )
-qshift1 = shift_trafo_1.reverse(q)
-qshift2 = shift_trafo_2.reverse(q)
-#show_animation(np.squeeze(qshift2),Xgrid=[X,Y])
-qshiftreverse = shift_trafo_2.apply(qshift2)
-res = q-qshiftreverse
-err = np.linalg.norm(np.reshape(res,-1))/np.linalg.norm(np.reshape(q,-1))
-err_time = [np.linalg.norm(np.reshape(res[...,i],-1))/np.linalg.norm(np.reshape(q[...,i],-1)) for i in range(len(time))]
-print("err =  %4.4e "% err)
-plt.pcolormesh(X,Y,q[...,34]-qshiftreverse[...,34])
-plt.colorbar()
+# second is the shift
+shift_trafo_2 = ACM_transforms(data_shape,L, shifts = shift2, dshifts=dy_shifts, dx = dX, use_scipy_transform=False )
 
-# %% Run shifted POD
+# print( "rel interpolation error: %4.4e"%(norm(Q - shift_trafo_2.apply(shift_trafo_2.reverse(Q)))/norm(Q)))
+# Qt = shift_trafo_2.reverse(Q)
+# Qt = shift_trafo_2.apply(Qt)
+# interp_time_err = [norm(qcol - qtcol)/norm(qcol)  for (qcol,qtcol) in zip(Q.T,Qt.T)]
+# %%
+from LIB.sPOD.lib.sPOD_tools import shifted_POD, shifted_rPCA
+
+nmodes = [100,85]
 trafos = [shift_trafo_1, shift_trafo_2]
-qmat = np.reshape(q, [-1, 2*Nt])
-
-
-#ret = shifted_POD(qmat, trafos, nmodes=nmodes, eps=1e-4, Niter=100, use_rSVD=True)
-[N,M]= np.shape(qmat)
-mu0 = N * M / (4 * np.sum(np.abs(qmat)))*0.001
-lambd0 = 1 / np.sqrt(np.maximum(M, N))*10
+M = np.prod(Ngrid)
+mu0 = M * Nsnapshots / (4 * np.sum(np.abs(Q)))*0.0005
+lambd0 = 1 / np.sqrt(np.maximum(M, Nsnapshots))*10
 #lambd0 = mu0*5e2
-ret = shifted_rPCA(qmat, trafos, nmodes_max = np.max(nmodes)+200, eps=1e-10, Niter=100, visualize=True, use_rSVD=True, lambd=lambd0, mu=mu0)
-# NmodesMax = 30
-# rel_err_matrix = np.ones([30]*len(trafos))
-# for r1 in range(0,NmodesMax):
-#     for r2 in range(0,NmodesMax):
-#         print("mode combi: [", r1,r2,"]\n")
-#         ret = shifted_POD(qmat, trafos, nmodes=[r1,r2], eps=1e-4, Niter=40, use_rSVD=True)
-#         print("\n\nmodes: [", r1, r2, "] error = %4.4e \n\n"%ret.rel_err_hist[-1])
-#         rel_err_matrix[r1,r2] = ret.rel_err_hist[-1]
-
-
+#ret = shifted_rPCA(Q, trafos, nmodes_max = np.max(nmodes)+20, eps=1e-10, Niter=100, visualize=True, use_rSVD=True, lambd=lambd0, mu=mu0)
+ret = shifted_POD(Q, trafos, nmodes, eps=1e-4, Niter=300, use_rSVD=True)
 qframes, qtilde , rel_err_list = ret.frames, np.reshape(ret.data_approx,data_shape), ret.rel_err_hist
-qf = [np.reshape(trafo.apply(frame.build_field()),data_shape) for trafo,frame in zip(trafos,qframes)]
-E = np.reshape(ret.error_matrix,data_shape)
+#qf = [np.reshape(trafo.apply(frame.build_field()),data_shape) for trafo,frame in zip(trafos,ret.frames)]
 
 
-
-# %%
-lims = [-1,1]
-nt = 450
-vort_tilde = fd.rot(qtilde[..., 0, nt],qtilde[..., 0, nt+Nt])
-vort_f1 = fd.rot(qf[0][..., 0, nt],qf[0][..., 0, nt+Nt])
-vort_f2 = fd.rot(qf[1][..., 0, nt],qf[1][..., 0, nt+Nt])
-vort_E = fd.rot(E[..., 0, nt],E[..., 0, nt+Nt])
-qplot = [vort_tilde,vort_f1,vort_f2, vort_E]
-fig, ax = plt.subplots(1,3,num=10)
-h_list = [0]*3
-cm = farge_colormap_multi( etalement_du_zero=0.2, limite_faible_fort=0.5)
-h_list[0] = ax[0].imshow( qplot[0].T, cmap=cm)
-ax[0].set_title(r"sPOD")
-h_list[1] = ax[1].imshow( qplot[1].T, cmap=cm)
-ax[1].set_title(r"Frame 1")
-h_list[2] = ax[2].imshow( qplot[2].T, cmap=cm)
-ax[2].set_title(r"Frame 2")
-#h_list[3] = ax[3].imshow( qplot[3].T, cmap=cm)
-#ax[3].set_title(r"Noise")
-for a,h in zip(ax,h_list):
-    h.set_clim(lims)
-    a.axis("image")
-    a.set_xticks([])
-    a.set_yticks([])
-    a.set_xlabel(r"$x$")
-    a.set_ylabel(r"$y$")
-
-cax = fig.add_axes([a.get_position().x1+0.01,a.get_position().y0,0.02,a.get_position().height])
-plt.colorbar(h, cax=cax)
-save_fig("imgs/vortex_rPCA.png")
-
-#np.savetxt('sPOD_error.txt', rel_err_matrix)
+###########################################
+# %% amplitudes
+############################################
+frame_amplitude_list= []
+mu_vecs = np.asarray(mu_vec_list).T
+Nsamples = np.size(mu_vecs,1)
+Nt = len(time)
+for frame in qframes:
+    VT = frame.modal_system["VT"]
+    S = frame.modal_system["sigma"]
+    VT =  np.diag(S)@VT
+    Nmodes = frame.Nmodes
+    frame_amplitude_list.append(VT)
 
 # %%
-rank = np.sum(ret.ranks)
-# plt.pcolormesh(X,Y,q[:,:,0,5]-qtilde[:,:,0,5])
-###########################
-# error of svd:
-qmat2 = np.reshape(qshift2,[-1,Nt])
-[U, S, VT] = np.linalg.svd(qmat, full_matrices=False)
-err_svd = np.sqrt(1-np.cumsum(S[:rank+5]**2)/np.sum(S**2))
-###########################
+#mu_vec_test= [4,4,4]
+mu_vec_test= [2,2,2]
+Nt = len(time)
 
-print("error svd: %2.2e"%err_svd[rank])
-u = U[:, :rank]
-s = S[:rank]
-vh = VT[:rank, :]
-# add up all the modes A=U * S * VH
-qsvd = np.reshape(np.dot(u * s, vh),data_shape)
-vort_svd=fd.rot(qsvd[..., 0, nt],qsvd[..., 0, nt+Nt])
-fig, ax = plt.subplots(1,2,num=11)
-h=[0,1]
-h[0] = ax[0].imshow( vort[...,nt].T, cmap=cm)
-ax[0].set_title(r"data")
-h[1] = ax[1].imshow(vort_svd.T, cmap=cm)
-ax[1].set_title(r"POD")
-for a,h in zip(ax,h):
-    h.set_clim(lims)
-    a.axis("image")
-    a.set_xticks([])
-    a.set_yticks([])
-    a.set_xlabel(r"$x$")
-    a.set_ylabel(r"$y$")
+shift1 = np.zeros([2,np.prod(Ngrid), Nt])
+shift2 = np.zeros([2,np.prod(Ngrid), Nt])
+shift2[1, ...] = give_shift(time,X.flatten()-L[0]/2, mu_vec_test, freq0)
+shiftsnew = [shift1, shift2]
+ux_tilde = my_interpolated_state(qframes, frame_amplitude_list, mu_vecs, Ngrid, time, mu_vec_test, shiftsnew )
 
-cax = fig.add_axes([a.get_position().x1+0.01,a.get_position().y0,0.02,a.get_position().height])
-plt.colorbar(h, cax=cax)
+# %%
+fpath = "/home/pkrah/develop/WABBIT-opt/data/ai_y0_"+"_".join(["%2.1f"%mu for mu in mu_vec_test])+"/ALL.mat"
+print("reading: ", fpath)
+_, ux, _,_ , _, _, _, _ = read_ACM_dat(fpath, sample_fraction=frac, time_sample_fraction=time_frac)
+
+error_online = np.linalg.norm(np.reshape(ux-np.squeeze(ux_tilde),[1,-1]),ord="fro")/np.linalg.norm(np.reshape(ux,[1,-1]),ord="fro")
+print("online-err: ", error_online)
 
 
-save_fig("imgs/vortex_POD.png")
-#
-with open('sPOD_error.txt', 'r') as f:
-    rel_err_matrix = [[float(num) for num in line.split(' ')] for line in f]
 
-rel_err_matrix = np.asarray(rel_err_matrix)
-smallest_error = np.ones([30+30,1])
-index = ['a']*60
-for i in range(30):
-    for k in range(30):
-        if smallest_error[i+k]>rel_err_matrix[i,k]:
-            smallest_error[i+k] = rel_err_matrix[i,k]
-            index[i+k] = '%d+%d'%(i,k)
-
-plt.figure(3)
-plt.plot(smallest_error[:-1],'*', label="sPOD")
-plt.plot(err_svd,'x-',label="POD")
-plt.xticks(np.arange(1,60,4),index[1::4])
-plt.legend()
-plt.xlabel(r"shifted ranks $r_1+r_2$ ")
-plt.ylabel(r"error")
 
 

@@ -94,3 +94,23 @@ def smoothstep(x,t,h):
     dist = np.where((x0<x) & (x<x1)  , 0.5*(1+np.cos((x-x0)*np.pi/(2*h))),np.zeros_like(x))
     dist = np.where(x<=x0, 1, dist)
     return dist
+
+
+def build_mask(X, Y, L, dX, shifts,  Radius = 1):
+    h = 1.5 * max(dX)  # definition of the smoothwidth of wabbit
+    mask = np.asarray([smoothstep(np.sqrt((X - L[0] / 2 - delta[0] ) ** 2 + (Y - L[1] / 2 - delta[1]) ** 2), Radius, h) for delta in
+                        shifts])
+    mask = np.moveaxis(mask, 0, -1)
+
+    return mask
+
+
+def read_performance_file(file_list):
+    if not isinstance(file_list, list):
+        return np.loadtxt(file_list)
+
+    perf_dat_list = []
+    for file in file_list:
+        perf_dat_list.append(np.loadtxt(file))
+
+    return perf_dat_list

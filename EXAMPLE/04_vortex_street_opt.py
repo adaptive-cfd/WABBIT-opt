@@ -9,7 +9,7 @@ MOVING CYLINDERS VORTEX STREET OPTIMIZATION
 # IMPORTED MODULES
 ###############################################################################
 import sys
-sys.path.append('./LIB/')
+sys.path.append('./../LIB/')
 
 
 import numpy as np
@@ -19,16 +19,17 @@ from LIB.utils import *
 import glob
 from LIB.IO import read_ACM_dat
 from LIB.sPOD.lib.transforms import transforms
-from LIB.sPOD.lib.sPOD_tools import frame, shifted_POD, shifted_rPCA, build_all_frames
+from LIB.sPOD.lib.sPOD_tools import frame, shifted_POD, shifted_rPCA, build_all_frames, load_frames, save_frames
 from LIB.sPOD.lib.farge_colormaps import farge_colormap_multi
 from LIB.sPOD.lib.plot_utils import show_animation, save_fig
+from LIB.IO import load_trajectories
 from scipy.optimize import basinhopping
 import torch
 import torch.nn as nn
 import matplotlib
 from os.path import expanduser
 import os
-ROOT_DIR = os.path.dirname(os.path.abspath("../README.md"))
+ROOT_DIR = os.path.dirname(os.path.abspath("README.md"))
 home = expanduser("~")
 
 font = {'family' : 'normal',
@@ -38,7 +39,6 @@ font = {'family' : 'normal',
 matplotlib.rc('font', **font)
 ###############################################################################
 cm = farge_colormap_multi( etalement_du_zero=0.2, limite_faible_fort=0.5)
-#from sympy.physics.vector import curl
 ###############################################################################
 def path(mu_vec):
     return (mu_vec[0] * sin(2 * pi * freq * time) + mu_vec[1] * sin(4 * pi * freq * time) + mu_vec[2] * sin(
@@ -77,35 +77,38 @@ def my_interpolated_state(sPOD_frames, frame_amplitude_list, mu_points, Ngrid, N
 
 
 ##########################################
-# %% Define your DATA:
+# % Define your DATA:
 ##########################################
 plt.close("all")
-ddir = ROOT_DIR+"/data/ai_y0_*8.2*"
+#ddir = ROOT_DIR+"/../data"
+ddir = "../data"
+idir = "images/vortex"
+case = "vortex_street"
+skip_existing = True
 frac = 4           # fraction of grid points to use
-ux_list = []
-uy_list = []
-time_list = []
-mu_list = []
-Nt_sum = 0
-for fpath in glob.glob(ddir):
-    fpath = fpath + "/ALL.mat"
-    print("reading: ", fpath)
-    ux, uy, _, mask, time, Ngrid, dX, L = read_ACM_dat(fpath, sample_fraction=frac)
-    ux_list.append(ux)
-    uy_list.append(uy)
-    time_list.append(time)
-    Nt = len(time)
-    Nt_sum += Nt
-    mu_vec = np.asarray([float(mu) for mu in fpath.split("/")[-2].split("_")[-3:]])
-    mu_list.append(mu_vec)
-ux = np.concatenate(ux_list,axis=2)
-uy = np.concatenate(uy_list,axis=2)
+
+ux_list, uy_list, dX, time_list, mu_vec_list, L = load_trajectories(ddir,["ux","uy","dx","time","mu","domain_size"],
+                                                               params_id_regex = "ai_y0_8.2*", sample_fraction= frac)
+
+ux_list1, uy_list1, dX, time_list1, mu_vec_list1, L = load_trajectories(ddir,["ux","uy","dx","time","mu","domain_size"],
+                                                               params_id_regex = "ai_y0_4*", sample_fraction= frac)
+time_list = [*time_list,*time_list1]
+mu_vec_list = [*mu_vec_list, *mu_vec_list1]
+time_sum = np.concatenate( time_list,axis=0)
+Nt_sum = np.size(time_sum)
+ux = np.concatenate([*ux_list,*ux_list1],axis=2)
+ux_list = None
+ux_list1 = None
+uy = np.concatenate([*uy_list,*uy_list1],axis=2)
+uy_list = None
+uy_list1 = None
 # %%
 
                     # Number of time intervalls
 Nvar = 1# data.shape[0]                    # Number of variables
 nmodes = [40,40]                              # reduction of singular values
-
+time = time_list[0]
+Ngrid = np.shape(ux[...,0])
 
   # number of grid points in x
 data_shape = [*Ngrid,Nvar,2*Nt_sum]
@@ -123,13 +126,7 @@ fd = finite_diffs(Ngrid,dX)
 vort= np.asarray([fd.rot(ux[...,nt],uy[...,nt]) for nt in range(np.size(ux,2))])
 vort = np.moveaxis(vort,0,-1)
 q = np.zeros(data_shape)
-#for nvar in range(Nvar):
-#for it,t in enumerate(time):
-#    q[:,:,0,it] = np.array(data[0,it,::frac,::frac]).T
-
-data = q
-q = np.concatenate([ux,uy],axis=-1)
-time_sum = np.concatenate([ *time_list, *time_list],axis=0)
+time_sum = np.concatenate( [time_sum,time_sum],axis=0)
 # %%data = np.zeros(data_shape)
 #for tau in range(0,Nt):
 #    data[0,tau,:,:] = curl(np.squeeze(ux[0,tau,:,:]),np.squeeze(uy[0,tau,:,:]))
@@ -142,13 +139,17 @@ shift1[0,:] = 0 * time_sum                      # frame 1, shift in x
 shift1[1,:] = 0 * time_sum                      # frame 1, shift in y
 shift2[0,:] = 0 * time_sum                      # frame 2, shift in x
 y_shifts =[]
-for mu_vec in mu_list:
+dy_shifts = []
+for mu_vec in mu_vec_list:
      y_shifts.append(-path(mu_vec)) # frame 2, shift in y
+     dy_shifts.append(dpath(mu_vec))  # frame 2, shift in y
+dy_shifts = np.concatenate(dy_shifts,axis=0)
 shift2[1,:] = np.concatenate([*y_shifts,*y_shifts],axis=0)
 # %% Create Trafo
-
+q = np.concatenate([ux,uy],axis=-1)
 shift_trafo_1 = transforms(data_shape,L, shifts = shift1,trafo_type="identity", dx = dX, use_scipy_transform=False )
 shift_trafo_2 = transforms(data_shape,L, shifts = shift2, dx = dX, use_scipy_transform=True )
+
 qshift1 = shift_trafo_1.reverse(q)
 qshift2 = shift_trafo_2.reverse(q)
 #show_animation(np.squeeze(qshift2),Xgrid=[X,Y])
@@ -156,12 +157,11 @@ qshiftreverse = shift_trafo_2.apply(qshift2)
 res = q-qshiftreverse
 err = np.linalg.norm(np.reshape(res,-1))/np.linalg.norm(np.reshape(q,-1))
 err_time = [np.linalg.norm(np.reshape(res[...,i],-1))/np.linalg.norm(np.reshape(q[...,i],-1)) for i in range(len(time))]
-print("err =  %4.4e "% err)
+print("shift interp err =  %4.4e "% err)
 plt.pcolormesh(X,Y,q[...,34]-qshiftreverse[...,34])
 plt.colorbar()
 
 # %% Run shifted POD
-ux_list, uy_list=None,None
 ux, uy = None, None
 trafos = [shift_trafo_1, shift_trafo_2]
 q = np.reshape(q, [-1, 2*Nt_sum])
@@ -172,7 +172,20 @@ q = np.reshape(q, [-1, 2*Nt_sum])
 mu0 = N * M / (4 * np.sum(np.abs(q)))*0.0005
 lambd0 = 1 / np.sqrt(np.maximum(M, N))*10
 #lambd0 = mu0*5e2
-ret = shifted_rPCA(q, trafos, nmodes_max = np.max(nmodes)+100, eps=1e-10, Niter=100, visualize=True, use_rSVD=True, lambd=lambd0, mu=mu0)
+
+sPOD_log_dir = ddir + "/sPOD/"+case+"_mu0_%.3e"%mu0+"/"
+if skip_existing and os.path.exists(sPOD_log_dir):
+    Nframes = len(trafos)
+    qframes, E = load_frames(sPOD_log_dir+"frame.npy", Nframes, load_ErrMat=True)
+    qtilde = build_all_frames(qframes)
+else:
+    ret = shifted_rPCA(q, trafos, nmodes_max = np.max(nmodes)+100, eps=1e-10, Niter=130, visualize=True, use_rSVD=True, lambd=lambd0, mu=mu0)
+    os.makedirs(sPOD_log_dir, exist_ok=True)  # succeeds even if directory exists.
+    qframes, qtilde, rel_err_list = ret.frames, np.reshape(ret.data_approx, data_shape), ret.rel_err_hist
+    E = np.reshape(ret.error_matrix, data_shape)
+    save_frames(sPOD_log_dir+"frame.npy",qframes,error_matrix=E)
+
+
 # NmodesMax = 30
 # rel_err_matrix = np.ones([30]*len(trafos))
 # for r1 in range(0,NmodesMax):
@@ -183,17 +196,17 @@ ret = shifted_rPCA(q, trafos, nmodes_max = np.max(nmodes)+100, eps=1e-10, Niter=
 #         rel_err_matrix[r1,r2] = ret.rel_err_hist[-1]
 
 
-qframes, qtilde , rel_err_list = ret.frames, np.reshape(ret.data_approx,data_shape), ret.rel_err_hist
+
 qf = [np.reshape(trafo.apply(frame.build_field()),data_shape) for trafo,frame in zip(trafos,qframes)]
-E = np.reshape(ret.error_matrix,data_shape)
 
 ###########################################
 # %% amplitudes
 ############################################
 frame_amplitude_x_list = []
 frame_amplitude_y_list = []
-mu_vecs = np.asarray(mu_list).T
+mu_vecs = np.asarray(mu_vec_list).T
 Nsamples = np.size(mu_vecs,1)
+Nt = len(time)
 for frame in qframes:
     VT = frame.modal_system["VT"]
     S = frame.modal_system["sigma"]
@@ -219,19 +232,21 @@ for frame in qframes:
 
 
 # %% Test predictions
-mu_vec_test= [4,-4,4]
-mu_vec_test= [8.2,-8.2,8.2]
+mu_vec_test= [4,4,4]
+#mu_vec_test= [8.2,-8.2,8.2]
+Nt = len(time)
 ux_tilde = my_interpolated_state(qframes, frame_amplitude_x_list, mu_vecs, Ngrid, Nt, mu_vec_test)
-uy_tilde = my_interpolated_state(qframes, frame_amplitude_y_list, mu_vecs, Ngrid, Nt, mu_vec_test)
+uy_tilde = my_interpolated_state(qframes, frame_amplitude_y_list, mu_vecs, Ngrid, Nt, mu_vec_test) + dpath(mu_vec_test)
 
 vort_tilde= np.asarray([fd.rot(ux_tilde[...,nt],uy_tilde[...,nt]) for nt in range(Nt)])
 vort_tilde = np.moveaxis(vort_tilde,0,-1)
-#show_animation(np.squeeze(vort_tilde),Xgrid=[X,Y],frequency=4,vmin=-2,vmax=2)
+show_animation(np.squeeze(vort_tilde),Xgrid=[X,Y],frequency=4,vmin=-2,vmax=2)#, save_path=idir )
 # %%
 h = 1.5*max(dX)/frac # definition of the smoothwidth of wabbit
 mask2 = np.asarray([smoothstep(np.sqrt((X-L[0]/2)**2 + (Y-L[1]/2-delta)**2),Radius,h) for delta in path(mu_vec_test)])
 mask2 = np.moveaxis(mask2,0,-1)
 Fy= np.asarray([calculate_force(uy_tilde[...,nt] - dpath(mu_vec_test)[...,nt], (1/C_eta)*mask2[...,nt], dX) for nt in range(Nt)])
+plt.figure(76)
 plt.plot(Fy)
 print("force sum:", np.sum(Fy))
 # %% optimization goal
@@ -243,7 +258,8 @@ opt_fun = lambda mu: opt_goal_lift_drag(mu, uy_ROM_fun, give_mask, dX, uy_solid)
 # %% optimize with global optimizerN, D_out
 ##########################################
 # mu_max = np.max(np.abs(mu_vecs))
-# bounds = lambda **kwargs:  np.all(np.abs(kwargs["x_new"])<mu_max)
+# bounds = lambda **kwargs:  np.all(np.abs(kwargs["x_new"])<mu_max)print("online-err: ", error_online)
+
 # bounds_i= [(-mu_max,mu_max)]*Dare
 # minimizer_kwargs = {"method":"L-BFGS-B", "jac":False, "bounds": bounds_i}
 # mu0 = (2*np.random.random(D)-1.0)*mu_max
@@ -338,9 +354,47 @@ class Decoder(nn.Module):
             qtilde += trafo.apply(qframe)
 
         return qtilde
+    def train(self, mu_vecs, amplitude_list, learning_rate = 1e-4, Niter = 2000):
 
-model = Decoder(D,Nout = [Nmodes_sum,Nt]).to(device)
+        mse_loss = nn.MSELoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
 
+        y_truth_list = [torch.permute(torch.tensor(ampl, dtype=torch.float32), (2, 0, 1)).to(device) for ampl in
+                        amplitude_list]
+        print("starting training")
+
+        for t in range(Niter):
+            # Forward pass: compute predicted y by passing x to the model.
+            y_pred = self.forward(x)
+            y_pred_list = [y_pred[:, 0:Nmodes_list[0], :], y_pred[:, Nmodes_list[0]:, :]]
+            # Compute and print loss.
+            loss = 0
+            for pred, truth in zip(y_pred_list, y_truth_list):
+                loss += torch.linalg.norm(pred.flatten() - truth.flatten()) ** 2 / torch.linalg.norm(
+                    truth.flatten()) ** 2
+            # if t % 1 == 0:
+            print(t, loss.item())
+
+            # Before the backward pass use the optimizer object to zero all of the
+            # gradients for the variables it will update (which are the learnable
+            # weights of the model). This is because by default, gradients are
+            # accumulated in buffers( i.e, not overwritten) whenever .backward()
+            # is called. Checkout docs of torch.autograd.backward for more details.
+            optimizer.zero_grad()
+
+            # Backward pass: compute gradient of the loss with respect to model
+            # parameters
+            loss.backward()
+
+            # Calling the step function on an Optimizer makes an update to its
+            # parameters
+            optimizer.step()
+
+
+model_ux = Decoder(D,Nout = [Nmodes_sum,Nt]).to(device)
+model_uy = Decoder(D,Nout = [Nmodes_sum,Nt]).to(device)
+model_ux.train(x,frame_amplitude_x_list, Niter = 2000)
+model_uy.train(x,frame_amplitude_y_list, Niter = 2000)
 
 # def myCustomLoss(predicted_amplitudes, frames, snapshots, Nt):
 #
@@ -365,44 +419,23 @@ model = Decoder(D,Nout = [Nmodes_sum,Nt]).to(device)
 # the model for us. Here we will use Adam; the optim package contains many other
 # optimization algorithms. The first argument to the Adam constructor tells the
 # optimizer which Tensors it should update.
-
-mse_loss = nn.MSELoss()
-learning_rate = 1e-4
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-y_truth_list = [torch.permute(torch.tensor(ampl,dtype=torch.float32),(2,0,1)).to(device) for ampl in frame_amplitude_y_list]
-print("starting training")
-
-for t in range(2000):
-    # Forward pass: compute predicted y by passing x to the model.
-    y_pred = model(x)
-    y_pred_list = [y_pred[:,0:Nmodes_list[0],:],y_pred[:,Nmodes_list[0]:,:]]
-    # Compute and print loss.
-    loss = 0
-    for pred, truth in zip(y_pred_list, y_truth_list):
-        loss += torch.linalg.norm(pred.flatten()- truth.flatten())**2/torch.linalg.norm(truth.flatten())**2
-    #if t % 1 == 0:
-    print(t, loss.item())
-
-    # Before the backward pass use the optimizer object to zero all of the
-    # gradients for the variables it will update (which are the learnable
-    # weights of the model). This is because by default, gradients are
-    # accumulated in buffers( i.e, not overwritten) whenever .backward()
-    # is called. Checkout docs of torch.autograd.backward for more details.
-    optimizer.zero_grad()
-
-    # Backward pass: compute gradient of the loss with respect to model
-    # parameters
-    loss.backward()
-
-    # Calling the step function on an Optimizer makes an update to its
-    # parameters
-    optimizer.step()
-
-qtilde = model.predict_state(qframes,Ngrid,Nt,np.asarray([4.,-4.,4.]))
-show_animation(np.squeeze(qtilde),Xgrid=[X,Y],frequency=4)
-
 # %%
-fpath = "/home/pkrah/develop/WABBIT-opt/data/ai_y0_4.0_-4.0_4.0/ALL.mat"
+ux_NN = model_ux.predict_state(qframes,Ngrid,Nt,np.asarray(mu_vec_test))
+uy_NN = model_uy.predict_state(qframes,Ngrid,Nt,np.asarray(mu_vec_test))
+vort_NN= np.asarray([fd.rot(ux_NN[...,nt],uy_NN[...,nt]) for nt in range(Nt)])
+vort_NN = np.moveaxis(vort_NN,0,-1)
+show_animation(np.squeeze(vort_NN),Xgrid=[X,Y],frequency=4,vmin=-2,vmax=2)
+show_animation(np.squeeze(vort_tilde),Xgrid=[X,Y],frequency=4,vmin=-2,vmax=2)
+# %%
+from IPython.display import HTML
+fpath = "/home/pkrah/develop/WABBIT-opt/data/ai_y0_"+"_".join(["%2.1f"%mu for mu in mu_vec_test])+"/ALL.mat"
 print("reading: ", fpath)
 ux, uy, _,_ , _, _, _, _ = read_ACM_dat(fpath, sample_fraction=frac)
+vort_truth = np.asarray([fd.rot(ux[...,nt],uy[...,nt]) for nt in range(Nt)])
+vort_truth = np.moveaxis(vort_truth,0,-1)
+show_animation(np.squeeze(vort_NN),Xgrid=[X,Y],frequency=2,figure_number=91,vmin=-1,vmax=1)
+show_animation(np.squeeze(vort_tilde),Xgrid=[X,Y],frequency=2,figure_number=92,vmin=-2,vmax=2)
+show_animation(np.squeeze(vort_truth),Xgrid=[X,Y],frequency=2,figure_number=93,vmin=-2,vmax=2)
+
+error_online = np.linalg.norm(np.reshape(vort_truth-vort_tilde,[1,-1]))/np.linalg.norm(np.reshape(vort_truth,[1,-1]))
+print("online-err: ", error_online)

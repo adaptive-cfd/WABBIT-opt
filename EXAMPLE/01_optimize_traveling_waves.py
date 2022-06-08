@@ -64,8 +64,8 @@ fields = [density]  #, velocity]
 ######################################
 qmat = np.reshape(fields,[Nx,Nt])
 data_shape = [Nx,1,1,Nt]
-trafos = [transforms(data_shape ,[L], shifts = shifts[0], dx = [dx] , use_scipy_transform=True),
-            transforms(data_shape ,[L], shifts = shifts[1], dx = [dx] , use_scipy_transform=True)]
+trafos = [transforms(data_shape ,[L], shifts = shifts[0].flatten(), dx = [dx] , use_scipy_transform=True),
+            transforms(data_shape ,[L], shifts = shifts[1].flatten(), dx = [dx] , use_scipy_transform=True)]
 
 
 mu = Nx * Nt / (4 * np.sum(np.abs(qmat)))*0.1
