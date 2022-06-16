@@ -12,14 +12,15 @@ import time
 
 
 D = 3
+#mu_max = 8.2
 mu_max = 4.0
 # mu_vecs = np.concatenate([mu_max*np.eye(Nt,D), -mu_max*np.eye(Nt,D)],axis=1)
 mu_vecs = np.asarray([(bin_array(i, D) * 2 - np.ones(D)) * mu_max for i in range(2 ** D)]).T
 #mu_vecs = np.delete(mu_vecs,[0,1,2,3,4,5,6],1)
 print(mu_vecs)
 ## loop over the different parameters and execute wabbit
-mpicommand = "mpirun -np 176 --hostfile=hosts"
-#mpicommand = "mpirun -np 6"
+#mpicommand = "mpirun -np 176 --hostfile=hosts"
+mpicommand = "mpirun -np 6"
 
 memory = "--memory=2GB"
 
