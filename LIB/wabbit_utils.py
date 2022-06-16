@@ -1,6 +1,7 @@
 import os
 from configparser import ConfigParser
 import shutil
+import time
 ###########################
 
 ROOT_DIR = os.path.dirname(os.path.abspath("../Makefile"))
@@ -47,7 +48,13 @@ def run_wabbit(params_dict, params_inifile, mpicommand, memory, save_log=True, d
     # execute FOM
     success = 1
     print(c)
+    time.sleep(3)
+    success = os.system("make clean")
+    time.sleep(3)
+    success = os.system("make")
+    time.sleep(8)
     success = os.system(c)
+    time.sleep(3)
     os.chdir("../")
 
     return success
