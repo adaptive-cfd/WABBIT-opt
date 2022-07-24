@@ -186,7 +186,7 @@ if __name__ == "__main__":
         q2 = np.concatenate(qs2, axis=1)
         q_frames = [q1, q2]
 
-        shifts = [np.concatenate(shifts, axis=1), -np.concatenate(shifts, axis=1)]
+        shifts = [np.squeeze(np.concatenate(shifts, axis=1)), -np.squeeze(np.concatenate(shifts, axis=1))]
         data_shape = [Nx, 1, 1, Nt * Nsamples]
         trafos = [transforms(data_shape, [L], shifts=shifts[0], dx=[dx], use_scipy_transform=True),
                   transforms(data_shape, [L], shifts=shifts[1], dx=[dx], use_scipy_transform=True)]
@@ -230,7 +230,7 @@ if __name__ == "__main__":
     #
     #ret  = shifted_POD(q, trafos, nmodes, eps=1e-16, Niter=400, use_rSVD = False)
     mu = np.prod(np.shape(q)) / (4 * np.sum(np.abs(q))) * 0.001
-    ret = shifted_rPCA(q, trafos, nmodes_max=np.max(nmodes) + 10, eps=1e-16, Niter=500, use_rSVD=True, mu=mu, lambd=0.1)
+    ret = shifted_rPCA(q, trafos, nmodes_max=np.max(nmodes) + 10, eps=1e-16, Niter=100, use_rSVD=True, mu=mu, lambd=0.1)
     # ret  = shifted_POD(q, trafos, nmodes, eps=1e-16, Niter=400, use_rSVD = False)
 
     sPOD_frames, qtilde, rel_err = ret.frames, ret.data_approx, ret.rel_err_hist
